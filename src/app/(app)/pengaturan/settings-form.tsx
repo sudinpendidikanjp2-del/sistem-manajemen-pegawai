@@ -10,12 +10,13 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Field, fieldProps } from '@/components/app/field';
 import { api, useAction } from '@/components/app/api-client';
+import { LocationPicker } from '@/components/app/location-picker';
 
 export type SettingField = {
   key: string;
   label: string;
   hint?: string;
-  type: 'bool' | 'number' | 'optnumber' | 'text' | 'textarea' | 'select';
+  type: 'bool' | 'number' | 'optnumber' | 'text' | 'textarea' | 'select' | 'map';
   min?: number;
   max?: number;
   step?: number;
@@ -41,7 +42,17 @@ export function SettingsCard({ title, description, fields, values, children }: {
           await run(() => api('PATCH', '/api/v1/settings', payload), { success: 'Pengaturan disimpan.' });
         }}>
           <div className="grid gap-5 sm:grid-cols-2">
-            {fields.map((f) => f.type === 'bool' ? (
+            {fields.map((f) => f.type === 'map' ? (
+              <div key={f.key} className="grid gap-2 sm:col-span-2">
+                <Label>{f.label}</Label>
+                <LocationPicker
+                  lat={typeof state['geo.officeLat'] === 'number' ? state['geo.officeLat'] : null}
+                  lng={typeof state['geo.officeLng'] === 'number' ? state['geo.officeLng'] : null}
+                  radiusM={typeof state['geo.radiusM'] === 'number' ? state['geo.radiusM'] : null}
+                  onChange={(a, b) => setState((x) => ({ ...x, 'geo.officeLat': a, 'geo.officeLng': b }))}
+                />
+              </div>
+            ) : f.type === 'bool' ? (
               <div key={f.key} className="flex items-start justify-between gap-4 rounded-lg border p-3 sm:col-span-2">
                 <div className="grid gap-1">
                   <Label htmlFor={id(f.key)}>{f.label}</Label>

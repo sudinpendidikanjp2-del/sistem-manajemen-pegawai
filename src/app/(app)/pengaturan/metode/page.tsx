@@ -26,6 +26,7 @@ const FACE: SettingField[] = [
 
 const GEO: SettingField[] = [
   { key: 'geo.enforce', label: 'Batasi absen wajah mandiri di sekitar kantor', type: 'bool', hint: 'Dinas luar tidak dibatasi radius; lokasi tetap dicatat.' },
+  { key: 'geo.map', label: 'Titik kantor di peta', type: 'map' },
   { key: 'geo.officeLat', label: 'Lintang kantor', type: 'optnumber', min: -90, max: 90, step: 0.000001 },
   { key: 'geo.officeLng', label: 'Bujur kantor', type: 'optnumber', min: -180, max: 180, step: 0.000001 },
   { key: 'geo.radiusM', label: 'Radius', type: 'number', min: 10, max: 100000, suffix: 'meter' },

@@ -223,3 +223,11 @@ Saat pengguna dipaksa mengganti password awal (atau mengaktifkan MFA), setelah b
 ## Kiosk tanpa login
 
 Pengaturan > Metode Absensi > "Kiosk bisa dibuka tanpa login" (mati bawaan). Bila aktif, `/kiosk` terbuka tanpa akun dan rekam wajahnya diterima dari siapa pun yang menjangkau alamat itu (dibatasi 120 percobaan per menit per alamat IP, wajah dicocokkan 1:N dengan semua pegawai aktif, dan dicatat atas nama "kiosk-terbuka"). Petugas yang login tetap memakai izin `kiosk.operate` dan melihat tombol Keluar kiosk; tamu tidak. Karena tidak ada kredensial, aktifkan hanya bila server hanya terjangkau dari jaringan kantor dan sebaiknya bersama kedip (liveness). Untuk perangkat yang harus bisa dijangkau dari luar jaringan kantor, pakai Titik Absen Wajah (`/absen/<token>`) yang bertoken, dibatasi per unit, dan bisa dicabut.
+
+## Peta titik koordinat kantor
+
+Pengaturan > Metode Absensi > Lokasi memiliki peta OpenStreetMap: ketuk peta atau seret pin untuk menetapkan lintang dan bujur, lingkaran menunjukkan radius yang diizinkan, tombol Lokasi saya memakai GPS perangkat, dan kolom Cari menemukan nama tempat (OpenStreetMap Nominatim, hanya saat tombol Cari ditekan). Kolom lintang, bujur, dan radius tetap bisa diketik dan peta mengikutinya. Ubin peta diunduh peramban dari tile.openstreetmap.org sehingga perangkat admin perlu internet; absen sendiri tidak memakai peta.
+
+## Aplikasi terpasang (PWA)
+
+Lihat `docs/PWA.md`. Singkatnya: manifest dengan ikon PNG dan maskable, service worker yang hanya menyimpan berkas statis dan model wajah (tidak ada halaman atau API berisi data), halaman offline, tombol Pasang aplikasi di menu akun, dan petunjuk untuk iOS.

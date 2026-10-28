@@ -6,6 +6,7 @@ import '@fontsource/poppins/700.css';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import { ConfirmHost } from '@/components/app/confirm-dialog';
+import { PwaRegister } from '@/components/app/pwa-register';
 import { getSetting } from '@/lib/settings';
 
 // Ikon tab mengikuti logo instansi; tanpa logo (atau saat basis data belum siap) memakai ikon bawaan.
@@ -14,7 +15,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: 'SIMPEG', template: '%s | SIMPEG' },
     description: 'Sistem Informasi Manajemen Pegawai',
-    ...(logo && { icons: { icon: `/api/v1/logo?v=${encodeURIComponent(logo)}`, apple: `/api/v1/logo?v=${encodeURIComponent(logo)}` } }),
+    // Ikon aplikasi terpasang memakai lambang SIMPEG; ikon tab peramban dan layar utama iOS mengikuti logo instansi bila ada.
+    icons: { ...(logo ? { icon: `/api/v1/logo?v=${encodeURIComponent(logo)}` } : {}), apple: logo ? `/api/v1/logo?v=${encodeURIComponent(logo)}` : '/icons/apple-touch-icon.png' },
+    appleWebApp: { capable: true, title: 'SIMPEG', statusBarStyle: 'default' },
+    applicationName: 'SIMPEG',
+    formatDetection: { telephone: false },
   };
 }
 
@@ -34,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <Toaster position="top-right" richColors closeButton />
         <ConfirmHost />
+        <PwaRegister />
       </body>
     </html>
   );

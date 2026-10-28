@@ -20,7 +20,11 @@ const nextConfig: NextConfig = {
     '/api/v1/**/*': ['./node_modules/pdfkit/js/data/**/*'],
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // Service worker tidak boleh di-cache lama agar pembaruan sampai ke pengguna.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Service-Worker-Allowed', value: '/' }] },
+    ];
   },
 };
 
