@@ -2,19 +2,25 @@
  * Tujuan: bisa dipasang sebagai aplikasi, memuat cepat, dan menampilkan halaman "Tidak ada koneksi" saat offline.
  * Yang sengaja TIDAK disimpan: halaman yang berisi data pegawai dan semua /api/ (data pribadi, perangkat bisa dipakai bersama).
  * Naikkan VERSION bila isi berkas ini berubah supaya cache lama dibuang. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `simpeg-shell-${VERSION}`;
 const STATIC = `simpeg-static-${VERSION}`;
 const MODELS = `simpeg-models-${VERSION}`;
 const KEEP = [SHELL, STATIC, MODELS];
 const OFFLINE_URL = '/offline';
 
+/** Simpan halaman offline beserta semua berkas /_next/static yang dipanggilnya, supaya tampil utuh tanpa jaringan. */
+async function precacheOffline() {
+  const shell = await caches.open(SHELL);
+  await shell.addAll([OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png', '/icon.svg']);
+  const html = await (await shell.match(OFFLINE_URL)).text();
+  const assets = [...new Set([...html.matchAll(/["'(](\/_next\/static\/[^"'()\s\\]+)/g)].map((m) => m[1]))];
+  const statics = await caches.open(STATIC);
+  await Promise.all(assets.map((u) => statics.add(u).catch(() => undefined)));
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(SHELL)
-      .then((c) => c.addAll([OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png', '/icon.svg']))
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil(precacheOffline().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

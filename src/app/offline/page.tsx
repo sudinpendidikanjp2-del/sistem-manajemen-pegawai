@@ -1,5 +1,6 @@
-import { WifiOff } from 'lucide-react';
-import { RetryButton } from './retry-button';
+import { RefreshCw, WifiOff } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export const metadata = { title: 'Tidak ada koneksi' };
 
@@ -11,7 +12,8 @@ export default function OfflinePage() {
         <span className="inline-flex size-16 items-center justify-center rounded-2xl bg-accent text-primary" aria-hidden><WifiOff className="size-8" /></span>
         <h1 className="text-2xl font-bold">Tidak ada koneksi</h1>
         <p className="text-muted-foreground">SIMPEG membutuhkan jaringan untuk absen dan menampilkan data pegawai. Periksa Wi-Fi atau paket data, lalu coba lagi. Data Anda tidak disimpan di perangkat ini.</p>
-        <RetryButton />
+        {/* Tautan biasa, bukan komponen klien: halaman ini harus tetap jalan walau berkas JavaScript tidak termuat. */}
+        <a href="/dashboard" className={cn(buttonVariants({ size: 'lg' }))}><RefreshCw />Coba lagi</a>
       </div>
     </main>
   );
