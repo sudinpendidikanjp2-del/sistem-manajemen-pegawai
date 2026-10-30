@@ -15,9 +15,13 @@ export const SETTING_DEFAULTS = {
   'kiosk.openAccess': false,
   'methods.fieldDuty': true,
   'methods.manual': true,
+  // Absen foto dan GPS tanpa pengenalan wajah, hanya untuk pegawai yang diizinkan admin.
+  'methods.photo': true,
   // Wajah: ambang jarak Euclidean face-api.js. Harus dikalibrasi (lihat docs/BIOMETRIK.md).
   'face.matchThreshold': 0.5,
   'face.minDetectionScore': 0.6,
+  // Selisih minimum antara jarak pegawai terpilih dan pegawai lain yang paling mirip. Lebih kecil dari ini wajah dianggap ambigu dan ditolak.
+  'face.minMargin': 0.08,
   'face.minFaceSizePx': 120,
   'face.requireLiveness': false,
   'face.requireOfficerVerification': false,

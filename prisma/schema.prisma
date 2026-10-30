@@ -161,6 +161,8 @@ model Employee {
   isActive            Boolean   @default(true) @map("is_active")
   activeEffectiveDate DateTime? @map("active_effective_date") @db.Date
   machinePin          String?   @unique @map("machine_pin") // ID pengguna di mesin absensi
+  // Boleh absen dengan foto dan GPS tanpa pengenalan wajah (mis. wajah sulit dikenali atau perangkat tanpa kamera yang cocok).
+  photoAttendance     Boolean   @default(false) @map("photo_attendance")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(3)
@@ -399,7 +401,7 @@ model AttendanceEvent {
   employeeId     String?        @map("employee_id") @db.Uuid
   direction      EventDirection
   workDate       DateTime?      @map("work_date") @db.Date // tanggal kerja (shift malam bisa milik hari sebelumnya)
-  method         String // FACE_SELF | FACE_KIOSK | FIELD_DUTY | MANUAL | DEVICE
+  method         String // FACE_SELF | FACE_KIOSK | FIELD_DUTY | PHOTO | MANUAL | DEVICE
   occurredAt     DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3) // waktu server
   clientTime     DateTime?      @map("client_time") @db.Timestamptz(3)
   idempotencyKey String?        @unique @map("idempotency_key")
@@ -434,6 +436,8 @@ model AttendanceVerification {
   quality           Json?
   livenessPassed    Boolean? @map("liveness_passed")
   distanceToOfficeM Float?   @map("distance_to_office_m")
+  // Jarak ke pegawai lain yang paling mirip (bukan yang dipilih); selisih kecil berarti wajah ambigu.
+  runnerUpDistance  Float?   @map("runner_up_distance")
   message           String?
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 

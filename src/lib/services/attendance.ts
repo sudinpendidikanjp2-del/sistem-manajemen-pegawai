@@ -60,6 +60,19 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+/** Jarak terdekat ke pegawai selain `exceptId`. */
+function runnerUpOf(dists: { id: string; d: number }[], exceptId: string) {
+  let r: number | null = null;
+  for (const x of dists) if (x.id !== exceptId && (r == null || x.d < r)) r = x.d;
+  return r;
+}
+
+/** Wajah hampir sama dekatnya dengan pegawai lain: lebih baik menolak daripada salah mengenali. */
+function ambiguity(own: number, runnerUp: number | null, minMargin: number) {
+  if (minMargin <= 0 || runnerUp == null || runnerUp - own >= minMargin) return null;
+  return 'Wajah ini mirip dengan pegawai lain sehingga tidak bisa dipastikan. Gunakan absen foto, mesin absensi, atau minta petugas mencatat.';
+}
+
 function methodEnabled(s: Settings, m: Method) {
   return m === 'FACE_SELF' ? s['methods.faceSelf'] : m === 'FACE_KIOSK' ? s['methods.faceKiosk'] : s['methods.fieldDuty'];
 }
@@ -126,6 +139,8 @@ export async function faceAttendance(actor: Actor, method: Method, raw: unknown,
   let outcome: Outcome = 'SUCCESS';
   let detail: string | null = null;
   let distanceToOffice: number | null = null;
+  let runnerUp: number | null = null;
+  const minMargin = Number(s['face.minMargin'] ?? 0);
 
   const fail = (o: Outcome, d?: string | null) => { outcome = o; detail = d ?? null; };
 
@@ -143,21 +158,29 @@ export async function faceAttendance(actor: Actor, method: Method, raw: unknown,
         const unitIds = station ? station.unitIds : (() => { const k = scopeOf(actor, 'kiosk.operate')!; return k.all ? null : k.unitIds; })();
         const candidates = await activeTemplates();
         const allowed = unitIds ? new Set((await prisma.employee.findMany({ where: { unitId: { in: unitIds } }, select: { id: true } })).map((e) => e.id)) : null;
+        // Jarak ke setiap pegawai. Hanya yang di unit titik absen boleh dipilih, tetapi pembanding "mirip" mencakup semua.
+        const dists = candidates.map((t) => ({ id: t.employeeId, d: bestDistance(t.descriptors, probe!, m) }));
         let best: { id: string; d: number } | null = null;
-        for (const t of candidates) {
-          if (allowed && !allowed.has(t.employeeId)) continue;
-          const d = bestDistance(t.descriptors, probe!, m);
-          if (!best || d < best.d) best = { id: t.employeeId, d };
-        }
+        for (const x of dists) if ((!allowed || allowed.has(x.id)) && (!best || x.d < best.d)) best = x;
         distance = best?.d ?? null;
-        if (best && best.d <= threshold) employeeId = best.id;
-        else fail('NOT_RECOGNIZED');
+        if (best && best.d <= threshold) {
+          runnerUp = runnerUpOf(dists, best.id);
+          const amb = ambiguity(best.d, runnerUp, minMargin);
+          if (amb) fail('NOT_RECOGNIZED', amb);
+          else employeeId = best.id;
+        } else fail('NOT_RECOGNIZED');
       } else {
-        const mine = await activeTemplates([employeeId!]);
+        const all = await activeTemplates();
+        const mine = all.filter((t) => t.employeeId === employeeId);
         if (!mine.length) fail('NOT_ENROLLED');
         else {
           distance = Math.min(...mine.map((t) => bestDistance(t.descriptors, probe!, m)));
           if (distance > threshold) fail('NOT_RECOGNIZED', 'Wajah tidak cocok dengan data wajah pemilik akun.');
+          else {
+            runnerUp = runnerUpOf(all.filter((t) => t.employeeId !== employeeId).map((t) => ({ id: t.employeeId, d: bestDistance(t.descriptors, probe!, m) })), employeeId!);
+            const amb = ambiguity(distance, runnerUp, minMargin);
+            if (amb) fail('NOT_RECOGNIZED', amb);
+          }
         }
       }
     } catch {
@@ -217,7 +240,7 @@ export async function faceAttendance(actor: Actor, method: Method, raw: unknown,
       verification: {
         create: {
           outcome, matcher: m.model, distance, threshold, quality: input.quality, livenessPassed: input.liveness?.passed ?? null,
-          distanceToOfficeM: distanceToOffice, message,
+          distanceToOfficeM: distanceToOffice, runnerUpDistance: runnerUp, message,
         },
       },
     },
@@ -237,6 +260,91 @@ export async function faceAttendance(actor: Actor, method: Method, raw: unknown,
     type: 'attendance', title: `Absen ${input.direction === 'IN' ? 'masuk' : 'pulang'} tercatat pukul ${base.time}`,
     body: rec?.lateMinutes && input.direction === 'IN' ? `Terlambat ${rec.lateMinutes} menit.` : null, link: '/absensi/saya',
   });
+  return { ...base, status: rec?.status, lateMinutes: rec?.lateMinutes, earlyLeaveMinutes: rec?.earlyLeaveMinutes, schedule: plan.schedule ? `${plan.schedule.name}, ${plan.schedule.checkIn} sampai ${plan.schedule.checkOut}` : null };
+}
+
+export const photoAttendanceInput = z.object({
+  direction: z.enum(['IN', 'OUT']),
+  photo: z.string().min(100, 'Ambil foto terlebih dahulu').max(2_200_000), // data URL JPEG bercap waktu dan lokasi
+  // Lokasi wajib: tujuannya agar admin tahu di mana absen dilakukan.
+  latitude: z.number({ error: 'Lokasi GPS wajib' }).min(-90).max(90),
+  longitude: z.number({ error: 'Lokasi GPS wajib' }).min(-180).max(180),
+  accuracyM: z.number().min(0).max(100000).nullable().optional(),
+  address: z.string().max(300).nullable().optional(),
+  note: z.string().trim().max(300).nullable().optional(),
+  idempotencyKey: z.string().min(8).max(100),
+  clientTime: z.string().datetime().nullable().optional(),
+});
+
+/**
+ * Absen foto: selfie + GPS tanpa pengenalan wajah, hanya untuk pegawai yang diizinkan admin (Employee.photoAttendance).
+ * Foto dan lokasi disimpan sebagai bukti; lokasi tidak dibatasi radius, tetapi jaraknya ke kantor dicatat.
+ */
+export async function photoAttendance(actor: Actor, raw: unknown, userAgent: string | null): Promise<AttendanceResult> {
+  if (!can(actor, 'attendance.self') || !actor.employeeId) throw forbidden('Akun ini tidak terhubung dengan data pegawai.');
+  rateLimit(`photo:${actor.userId}`, 12, 60_000);
+  const input = photoAttendanceInput.parse(raw);
+  const s = await getSettings();
+  const tz = s['org.timezone'];
+  const now = new Date();
+  const employeeId = actor.employeeId;
+
+  const prior = await prisma.attendanceEvent.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { verification: true } });
+  if (prior) {
+    if (prior.actorUserId !== realUserId(actor) || prior.method !== 'PHOTO') throw conflict('Kunci transaksi sudah dipakai. Muat ulang halaman lalu coba lagi.');
+    const o = (prior.verification?.outcome ?? 'SERVICE_UNAVAILABLE') as Outcome;
+    return { outcome: o, message: prior.verification?.message ?? OUTCOME_MESSAGE[o], eventId: prior.id, time: fmtJam(prior.occurredAt, tz) ?? undefined };
+  }
+
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+  let outcome: Outcome = 'SUCCESS';
+  let detail: string | null = null;
+  const fail = (o: Outcome, d?: string | null) => { outcome = o; detail = d ?? null; };
+  if (!s['methods.photo']) fail('DEVICE_NOT_ALLOWED', 'Absen foto sedang dinonaktifkan administrator.');
+  else if (!employee?.photoAttendance) fail('DEVICE_NOT_ALLOWED', 'Absen foto belum diizinkan untuk akun Anda. Hubungi admin kepegawaian.');
+  else if (!employee.isActive || employee.deletedAt) fail('INACTIVE');
+
+  const photo = jpegFromDataUrl(input.photo);
+  if (!photo) throw unprocessable('Foto tidak valid. Ambil ulang foto.', { photo: 'Ambil ulang foto' });
+
+  let distanceToOffice: number | null = null;
+  if (s['geo.officeLat'] != null && s['geo.officeLng'] != null) {
+    distanceToOffice = Math.round(haversineM(input.latitude, input.longitude, Number(s['geo.officeLat']), Number(s['geo.officeLng'])));
+  }
+
+  const workDate = await resolveWorkDate(employeeId, now, s);
+  if (outcome === 'SUCCESS') {
+    const plan = await dayPlan(employeeId, workDate);
+    if (s['rules.blockOutsideSchedule'] && (!plan.schedule || plan.isOffDay)) fail('OUTSIDE_SCHEDULE');
+    const windowMin = Number(s['rules.duplicateWindowMinutes']);
+    const recent = await prisma.attendanceEvent.findFirst({
+      where: { employeeId, direction: input.direction, occurredAt: { gte: new Date(now.getTime() - windowMin * 60_000) }, verification: { outcome: 'SUCCESS' } },
+    });
+    if (outcome === 'SUCCESS' && recent) fail('DUPLICATE');
+    if (outcome === 'SUCCESS' && input.direction === 'IN') {
+      const rec = await prisma.attendanceRecord.findUnique({ where: { employeeId_workDate: { employeeId, workDate: toDbDate(workDate) } } });
+      if (rec?.checkInAt) fail('ALREADY_RECORDED', `Absen masuk sudah tercatat pukul ${fmtJam(rec.checkInAt, tz)}.`);
+    }
+  }
+
+  // Foto selalu disimpan (itulah buktinya), terlepas dari pengaturan foto dinas luar. Berkas lama dihapus oleh retensi foto.
+  const photoPath = outcome === 'SUCCESS' ? await saveFile(`foto/${workDate.slice(0, 7)}`, photo, 'jpg') : null;
+  const message = detail ?? (outcome === 'SUCCESS' ? 'Absen foto dengan lokasi GPS.' : OUTCOME_MESSAGE[outcome]);
+  const event = await prisma.attendanceEvent.create({
+    data: {
+      employeeId, direction: input.direction, workDate: toDbDate(workDate), method: 'PHOTO', occurredAt: now,
+      clientTime: input.clientTime ? new Date(input.clientTime) : null, idempotencyKey: input.idempotencyKey,
+      latitude: input.latitude, longitude: input.longitude, accuracyM: input.accuracyM ?? null, address: input.address ?? null,
+      photoPath, note: input.note ?? null, actorUserId: realUserId(actor), userAgent: userAgent?.slice(0, 300) ?? null,
+      verification: { create: { outcome, matcher: 'FOTO', distanceToOfficeM: distanceToOffice, message } },
+    },
+  });
+  const base: AttendanceResult = { outcome, message, eventId: event.id, time: fmtJam(now, tz) ?? undefined, workDate };
+  if (employee) base.employee = { id: employee.id, name: employee.fullName, employeeNumber: employee.employeeNumber, position: employee.position };
+  if (outcome !== 'SUCCESS') return base;
+  await audit(actor, { action: 'attendance.photo', entityType: 'AttendanceEvent', entityId: event.id, meta: { direction: input.direction, lat: input.latitude, lng: input.longitude, distanceToOfficeM: distanceToOffice } });
+  const rec = await rebuildRecord(employeeId, workDate);
+  const plan = await dayPlan(employeeId, workDate);
   return { ...base, status: rec?.status, lateMinutes: rec?.lateMinutes, earlyLeaveMinutes: rec?.earlyLeaveMinutes, schedule: plan.schedule ? `${plan.schedule.name}, ${plan.schedule.checkIn} sampai ${plan.schedule.checkOut}` : null };
 }
 

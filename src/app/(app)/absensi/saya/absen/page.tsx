@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { MapPin, ScanFace } from 'lucide-react';
+import { Camera, MapPin, ScanFace } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageBody, PageHeader } from '@/components/app/page-header';
@@ -21,8 +21,10 @@ export default async function AbsenPage() {
   const [face, todayRec, emp] = await Promise.all([
     prisma.employeeBiometric.findFirst({ where: { employeeId: actor.employeeId, status: { in: ['ACTIVE', 'PENDING_VERIFICATION'] } } }),
     prisma.attendanceRecord.findUnique({ where: { employeeId_workDate: { employeeId: actor.employeeId, workDate: toDbDate(today) } } }),
-    prisma.employee.findUniqueOrThrow({ where: { id: actor.employeeId }, select: { isActive: true } }),
+    prisma.employee.findUniqueOrThrow({ where: { id: actor.employeeId }, select: { isActive: true, photoAttendance: true } }),
   ]);
+  const photoOk = emp.photoAttendance && !!s['methods.photo'];
+  const photoAction = photoOk ? [{ href: '/absensi/saya/foto', label: 'Absen foto', primary: true }] : [];
   const suggested = todayRec?.checkInAt && !todayRec.checkOutAt ? 'OUT' : 'IN';
   return (
     <>
@@ -31,6 +33,7 @@ export default async function AbsenPage() {
         description={todayRec?.checkInAt ? `Hari ini masuk ${fmtJam(todayRec.checkInAt, tz)}${todayRec.checkOutAt ? `, pulang ${fmtJam(todayRec.checkOutAt, tz)}` : ''}.` : 'Belum ada absen hari ini.'}
         actions={
           <>
+            {photoOk && <Button asChild variant="outline"><Link href="/absensi/saya/foto"><Camera />Absen foto</Link></Button>}
             {s['methods.fieldDuty'] && <Button asChild variant="outline"><Link href="/dinas-luar"><MapPin />Absen dinas luar</Link></Button>}
             <Button asChild variant="outline"><Link href="/absensi/saya">Rekap presensi</Link></Button>
           </>
@@ -38,11 +41,11 @@ export default async function AbsenPage() {
       />
       <PageBody className="grid max-w-3xl gap-6">
         {!emp.isActive ? <EmptyState title="Status pegawai nonaktif" description="Absensi tidak bisa dicatat untuk pegawai nonaktif. Hubungi admin kepegawaian bila ini keliru." /> : !s['methods.faceSelf'] ? (
-          <Card><CardContent><EmptyState icon={ScanFace} title="Absen wajah dari perangkat pribadi sedang dinonaktifkan" description="Gunakan kiosk wajah atau mesin absensi di kantor. Bila bertugas di luar, gunakan absen dinas luar." /></CardContent></Card>
+          <Card><CardContent><EmptyState icon={ScanFace} title="Absen wajah dari perangkat pribadi sedang dinonaktifkan" description="Gunakan kiosk wajah atau mesin absensi di kantor. Bila bertugas di luar, gunakan absen dinas luar." actions={photoAction} /></CardContent></Card>
         ) : !face ? (
-          <Card><CardContent><EmptyState icon={ScanFace} title="Wajah Anda belum terdaftar" description="Daftarkan wajah satu kali untuk bisa absen dari perangkat ini. Anda tetap bisa absen lewat mesin atau petugas." actions={[{ href: '/absensi/saya/wajah', label: 'Daftarkan wajah', primary: true }]} /></CardContent></Card>
+          <Card><CardContent><EmptyState icon={ScanFace} title="Wajah Anda belum terdaftar" description="Daftarkan wajah satu kali untuk bisa absen dari perangkat ini. Anda tetap bisa absen lewat mesin atau petugas." actions={[...photoAction, { href: '/absensi/saya/wajah', label: 'Daftarkan wajah', primary: !photoOk }]} /></CardContent></Card>
         ) : face.status !== 'ACTIVE' ? (
-          <Card><CardContent><EmptyState icon={ScanFace} title="Pendaftaran wajah menunggu verifikasi petugas" description="Sementara itu gunakan mesin absensi atau minta petugas mencatat absensi Anda." /></CardContent></Card>
+          <Card><CardContent><EmptyState icon={ScanFace} title="Pendaftaran wajah menunggu verifikasi petugas" description="Sementara itu gunakan mesin absensi atau minta petugas mencatat absensi Anda." actions={photoAction} /></CardContent></Card>
         ) : (
           <FaceCheck suggested={suggested} requireLiveness={!!s['face.requireLiveness']} wantGps={!!s['geo.enforce']} />
         )}

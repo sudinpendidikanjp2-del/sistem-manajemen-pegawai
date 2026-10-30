@@ -264,6 +264,7 @@ export const METHOD_LABEL: Record<string, string> = {
   FACE_SELF: 'Wajah (perangkat pribadi)',
   FACE_KIOSK: 'Wajah (kiosk)',
   FIELD_DUTY: 'Foto GPS dinas luar',
+  PHOTO: 'Foto dan GPS (tanpa wajah)',
   MANUAL: 'Input manual petugas',
   DEVICE: 'Mesin absensi',
   KOREKSI: 'Koreksi disetujui',

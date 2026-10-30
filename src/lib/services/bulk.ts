@@ -27,6 +27,8 @@ export const bulkUserInput = z.discriminatedUnion('action', [
 ]);
 export const bulkEmployeeInput = z.discriminatedUnion('action', [
   z.object({ action: z.literal('delete'), ids, reason: z.string().trim().min(3, 'Alasan wajib diisi').max(300) }),
+  z.object({ action: z.literal('photo-on'), ids }),
+  z.object({ action: z.literal('photo-off'), ids }),
   z.object({ action: z.literal('role'), ids, roleId: z.string().uuid('Pilih peran'), unitId: z.string().uuid().nullable().optional(), includeSubunits: z.boolean().default(true) }),
   z.object({ action: z.literal('reset-password'), ids }),
   z.object({ action: z.literal('deactivate'), ids }),
@@ -73,6 +75,7 @@ function runUserAction(actor: Actor, userIds: string[], v: UserAction) {
 export async function bulkEmployees(actor: Actor, raw: unknown): Promise<BulkOutcome> {
   const v = bulkEmployeeInput.parse(raw);
   if (v.action === 'delete') return deleteEmployees(actor, v.ids, v.reason);
+  if (v.action === 'photo-on' || v.action === 'photo-off') return setPhotoAttendance(actor, v.ids, v.action === 'photo-on');
   assertCan(actor, 'user.manage');
   const emps = await prisma.employee.findMany({ where: { AND: [{ id: { in: v.ids }, deletedAt: null }, employeeScopeWhere(actor, 'user.manage')] }, select: { id: true, fullName: true, user: { select: { id: true } } } });
   const withAccount = emps.filter((e) => e.user);
@@ -118,5 +121,28 @@ export async function deleteEmployees(actor: Actor, employeeIds: string[], reaso
     }
   }
   if (!out.done && !out.skipped.length) throw unprocessable('Tidak ada data yang dihapus.');
+  return out;
+}
+
+/**
+ * Izinkan atau cabut absen foto (foto dan GPS tanpa pengenalan wajah) untuk pegawai terpilih.
+ * Perubahan tercatat di audit log per pegawai.
+ */
+export async function setPhotoAttendance(actor: Actor, employeeIds: string[], enabled: boolean): Promise<BulkOutcome> {
+  assertCan(actor, 'employee.write');
+  const out: BulkOutcome = { done: 0, skipped: [] };
+  for (const id of employeeIds) {
+    let name = 'Pegawai';
+    try {
+      const emp = await getEmployeeInScope(actor, 'employee.write', id);
+      name = emp.fullName;
+      if (emp.photoAttendance === enabled) { out.skipped.push({ name, reason: enabled ? 'Sudah diizinkan' : 'Memang belum diizinkan' }); continue; }
+      await prisma.employee.update({ where: { id }, data: { photoAttendance: enabled } });
+      await audit(actor, { action: enabled ? 'employee.photo_attendance_on' : 'employee.photo_attendance_off', entityType: 'Employee', entityId: id, before: { photoAttendance: emp.photoAttendance }, after: { photoAttendance: enabled } });
+      out.done += 1;
+    } catch (err) {
+      out.skipped.push({ name, reason: (err as Error).message });
+    }
+  }
   return out;
 }
