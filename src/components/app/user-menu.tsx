@@ -6,6 +6,7 @@ import { ChevronDown, KeyRound, LogOut } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InstallAppMenuItem } from '@/components/app/install-app';
 import { cn } from '@/lib/utils';
 
 export interface MenuUser { name: string; username: string; roles: string }
@@ -35,6 +36,7 @@ function Items({ user }: { user: MenuUser }) {
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild><Link href="/akun/keamanan"><KeyRound />Password dan MFA</Link></DropdownMenuItem>
+      <InstallAppMenuItem />
       <DropdownMenuItem variant="destructive" onSelect={logout}><LogOut />Keluar</DropdownMenuItem>
     </>
   );
