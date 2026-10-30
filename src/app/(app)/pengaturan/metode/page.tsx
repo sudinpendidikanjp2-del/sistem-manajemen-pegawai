@@ -13,12 +13,14 @@ const METHODS: SettingField[] = [
   { key: 'methods.faceKiosk', label: 'Kiosk wajah', type: 'bool', hint: 'Satu perangkat bersama di kantor, dibuka lewat halaman /kiosk.' },
   { key: 'kiosk.openAccess', label: 'Kiosk bisa dibuka tanpa login', type: 'bool', hint: 'Siapa pun yang bisa menjangkau alamat /kiosk dapat mengabsen lewat wajah, tanpa akun. Aktifkan hanya bila server hanya bisa dijangkau dari jaringan kantor, dan sebaiknya bersama kedip (liveness). Untuk akses dari luar jaringan kantor, pakai Titik Absen Wajah yang bertoken.' },
   { key: 'methods.fieldDuty', label: 'Dinas luar (foto, waktu, dan GPS)', type: 'bool' },
+  { key: 'methods.photo', label: 'Absen foto dan GPS tanpa pengenalan wajah', type: 'bool', hint: 'Hanya untuk pegawai yang diizinkan admin (di data pegawai). Foto dan lokasi tercatat sebagai bukti, tanpa pencocokan wajah.' },
   { key: 'methods.manual', label: 'Input manual oleh petugas', type: 'bool', hint: 'Untuk gangguan alat. Wajib alasan dan tercatat di audit log.' },
 ];
 
 const FACE: SettingField[] = [
   { key: 'face.matchThreshold', label: 'Ambang jarak kecocokan', type: 'number', min: 0.2, max: 0.8, step: 0.01, hint: 'Makin kecil makin ketat: penolakan pegawai sah naik, penerimaan orang lain turun. Kalibrasi dengan data instansi sendiri (docs/BIOMETRIK.md).' },
   { key: 'face.minDetectionScore', label: 'Skor deteksi minimum', type: 'number', min: 0.3, max: 0.99, step: 0.01, hint: 'Di bawah ini, pegawai diminta memperbaiki posisi atau cahaya.' },
+  { key: 'face.minMargin', label: 'Selisih minimum dengan pegawai lain yang mirip', type: 'number', min: 0, max: 0.4, step: 0.01, hint: 'Bila wajah hampir sama dekatnya dengan dua pegawai, absen ditolak daripada salah mengenali. Naikkan bila masih ada salah kenal; 0 mematikan pemeriksaan ini.' },
   { key: 'face.minFaceSizePx', label: 'Ukuran wajah minimum', type: 'number', min: 40, max: 600, suffix: 'piksel' },
   { key: 'face.requireLiveness', label: 'Wajib kedip (deteksi liveness sederhana)', type: 'bool', hint: 'Pemeriksaan di peramban; mengurangi pemakaian foto cetak, tetapi tidak menjamin anti-spoofing.' },
   { key: 'face.requireOfficerVerification', label: 'Pendaftaran wajah mandiri perlu verifikasi petugas', type: 'bool' },

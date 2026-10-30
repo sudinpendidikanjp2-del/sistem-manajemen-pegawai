@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, useState } from 'react';
-import { Download, KeyRound, ShieldPlus, Trash2, UserCheck, UserX, X } from 'lucide-react';
+import { Camera, CameraOff, Download, KeyRound, ShieldPlus, Trash2, UserCheck, UserX, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -67,7 +67,7 @@ function csvOf(rows: NonNullable<Outcome['credentials']>) {
  * Bilah aksi massal. `mode` menentukan apakah id terpilih adalah id pegawai atau id pengguna.
  * Kata sandi sementara hanya tampil sekali setelah reset.
  */
-export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelete, noun }: {
+export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelete, canEdit, noun }: {
   mode: 'employee' | 'user';
   roles: Opt[];
   units: Opt[];
@@ -75,6 +75,8 @@ export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelet
   /** Punya izin kelola pengguna: tombol peran, reset password, dan (non)aktifkan akun tampil. */
   canAccounts: boolean;
   canDelete?: boolean;
+  /** Boleh mengubah data pegawai (employee.write): tombol izin absen foto tampil. */
+  canEdit?: boolean;
   noun: string;
 }) {
   const { selected, clear } = useBulk();
@@ -108,6 +110,14 @@ export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelet
             <Button size="sm" variant="outline" disabled={pending} onClick={async () => {
               if (await confirmDialog({ title: `Aktifkan ${ids.length} akun?`, description: `Pemilik akun bisa masuk lagi.${accountNote}`, confirmLabel: 'Aktifkan' })) await send({ action: 'activate' }, 'Aktifkan akun');
             }}><UserCheck />Aktifkan akun</Button>
+            </>}
+            {mode === 'employee' && canEdit && <>
+              <Button size="sm" variant="outline" disabled={pending} onClick={async () => {
+                if (await confirmDialog({ title: `Izinkan absen foto untuk ${ids.length} pegawai?`, description: 'Pegawai ini bisa absen dengan foto dan GPS tanpa pengenalan wajah. Foto dan lokasi tercatat sebagai bukti.', confirmLabel: 'Izinkan' })) await send({ action: 'photo-on' }, 'Izinkan absen foto');
+              }}><Camera />Izinkan absen foto</Button>
+              <Button size="sm" variant="outline" disabled={pending} onClick={async () => {
+                if (await confirmDialog({ title: `Cabut absen foto untuk ${ids.length} pegawai?`, description: 'Pegawai ini kembali hanya bisa absen dengan wajah, mesin, atau petugas.', confirmLabel: 'Cabut', destructive: true })) await send({ action: 'photo-off' }, 'Cabut absen foto');
+              }}><CameraOff />Cabut absen foto</Button>
             </>}
             {mode === 'employee' && canDelete && <Button size="sm" variant="outline-destructive" onClick={() => setDialog('delete')}><Trash2 />Hapus data</Button>}
           </div>

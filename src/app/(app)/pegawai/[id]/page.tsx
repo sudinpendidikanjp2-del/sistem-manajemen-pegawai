@@ -19,6 +19,7 @@ import { plansFor } from '@/lib/attendance/plan';
 import { getSettings } from '@/lib/settings';
 import { addDays, fmtTanggal, fmtTglPendek, fmtWaktu, fromDbDate, todayIn } from '@/lib/time';
 import { EmployeeActions } from './actions';
+import { PhotoAttendanceSwitch } from './photo-switch';
 
 export const metadata = { title: 'Detail pegawai' };
 
@@ -86,6 +87,8 @@ export default async function EmployeeDetail({ params, searchParams }: { params:
                   <dt className="text-muted-foreground">ID mesin absensi</dt><dd className="tabular">{e.machinePin ?? '-'}</dd>
                   <dt className="text-muted-foreground">Status</dt><dd><StatusBadge status={e.isActive ? 'APPROVED' : 'CANCELLED'} label={e.isActive ? 'Aktif' : 'Nonaktif'} /></dd>
                   <dt className="text-muted-foreground">Akun login</dt><dd>{e.user ? `${e.user.username}${e.user.isActive ? '' : ' (nonaktif)'}${e.user.lastLoginAt ? `, terakhir masuk ${fmtWaktu(e.user.lastLoginAt, tz)}` : ', belum pernah masuk'}` : 'Belum ada'}</dd>
+                  <dt className="text-muted-foreground">Absen foto dan GPS</dt>
+                  <dd><PhotoAttendanceSwitch id={id} name={e.fullName} enabled={e.photoAttendance} canEdit={can(actor, 'employee.write')} /><span className="mt-1 block text-xs text-muted-foreground">Absen dengan foto dan lokasi tanpa pengenalan wajah. Pegawai yang tidak bisa memakai wajah.</span></dd>
                   <dt className="text-muted-foreground">Template wajah</dt>
                   <dd>{face ? <span className="flex flex-wrap items-center gap-2"><StatusBadge status={face.status} />{face.sampleCount} sampel, persetujuan {fmtWaktu(face.consentAt, tz)}</span> : 'Belum terdaftar'}</dd>
                 </dl>

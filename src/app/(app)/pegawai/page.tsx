@@ -28,7 +28,8 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
   const filters = { q: sp.q, unitId: sp.unitId, status: sp.status, face: sp.face, employmentStatus: sp.employmentStatus };
   const canAccounts = can(actor, 'user.manage');
   const canDelete = can(actor, 'employee.delete');
-  const bulk = canAccounts || canDelete;
+  const canEdit = can(actor, 'employee.write');
+  const bulk = canAccounts || canDelete || canEdit;
   const [data, units, roles, assignUnits] = await Promise.all([
     listEmployees(actor, { ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), sort: sp.sort, dir: sp.dir, page: sp.page, per: sp.per }),
     unitOptions(actor, 'employee.read'),
@@ -144,7 +145,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
             </TableBody>
           </Table>
           <Pager total={data.total} page={data.page} pageSize={data.pageSize} params={params} />
-          {bulk && <BulkBar mode="employee" noun="pegawai" roles={roles.map((r) => ({ id: r.id, name: r.name }))} units={assignUnits} canAllUnits={!!scopeOf(actor, 'user.manage')?.all} canAccounts={canAccounts} canDelete={canDelete} />}
+          {bulk && <BulkBar mode="employee" noun="pegawai" roles={roles.map((r) => ({ id: r.id, name: r.name }))} units={assignUnits} canAllUnits={!!scopeOf(actor, 'user.manage')?.all} canAccounts={canAccounts} canDelete={canDelete} canEdit={canEdit} />}
         </div>
         </BulkSelect>
       </PageBody>

@@ -7,6 +7,14 @@
 3. Server membandingkan descriptor dengan **template** pegawai memakai jarak Euclidean (`src/lib/biometric/matcher.ts`). Lolos bila jarak terdekat ≤ ambang `face.matchThreshold`.
 4. Setiap percobaan, berhasil maupun gagal, dicatat sebagai `AttendanceEvent` + `AttendanceVerification` (hasil, jarak, ambang, kualitas, liveness, jarak ke kantor). Keduanya tidak bisa diubah atau dihapus. Rekap hanya memakai transaksi yang berhasil.
 
+### Wajah yang mirip dengan pegawai lain
+
+Pengenalan 128 dimensi bisa keliru pada dua orang yang wajahnya mirip. Karena itu server juga menghitung jarak ke **pegawai terdekat kedua** (`runnerUpDistance`, disimpan pada verifikasi). Bila selisihnya kurang dari `face.minMargin` (bawaan 0,08), percobaan ditolak sebagai tidak dikenali dengan pesan agar memakai absen foto, mesin absensi, atau petugas. Naikkan nilainya bila masih ada salah kenali; turunkan bila terlalu banyak penolakan. Menurunkan `face.matchThreshold` juga mengurangi salah kenali.
+
+### Absen foto dan GPS
+
+Untuk pegawai yang wajahnya sering gagal atau tertukar, admin dapat mengaktifkan **Absen foto dan GPS** pada detail pegawai (atau massal dari daftar pegawai). Pegawai memotret dirinya dari menu Absen foto; lokasi GPS wajib. Foto bercap nama, waktu, dan koordinat disimpan sebagai bukti, metode tercatat `PHOTO`, dan jarak ke kantor dicatat tanpa pembatasan radius. Fitur dapat dimatikan menyeluruh di Pengaturan, Metode Absensi (`methods.photo`). Titik absen terlihat di detail rekap lewat tautan peta.
+
 Pada kiosk, descriptor dibandingkan dengan semua template aktif dalam cakupan unit operator kiosk, lalu dipilih yang terdekat.
 
 ## Pendaftaran dan persetujuan
