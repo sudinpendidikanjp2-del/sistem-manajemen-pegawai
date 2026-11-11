@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { Briefcase, CircleCheck, CircleX, MapPin, Maximize } from 'lucide-react';
+import { Briefcase, CircleCheck, CircleX, MapPin, Maximize, Volume2, VolumeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api, newKey } from './api-client';
 import { adaptiveSize, blinkDetector, detect, draw, fmtClock, fmtDateLong, frameDelay, loadFaceApi, qualityOf, serverClock, startCamera, stopCamera, toArray, track } from '@/lib/face-client';
+import { announceResult, setSoundEnabled, soundEnabled, subscribeSound, unlockSound } from '@/lib/kiosk-sound';
 import { cn } from '@/lib/utils';
 
 interface Res { at?: number; outcome: string; message: string; time?: string; status?: string; lateMinutes?: number; similarity?: number | null; schedule?: string | null; employee?: { name: string; employeeNumber: string | null; position: string | null } }
@@ -31,7 +32,10 @@ export function Kiosk({ org, logo, enabled, requireLiveness, enrolled, endpoint 
   const [result, setResult] = useState<Res | null>(null);
   const [log, setLog] = useState<{ t: string; text: string; ok: boolean }[]>([]);
 
-  const pick = (m: 'IN' | 'OUT') => { modeRef.current = m; setMode(m); };
+  const sound = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  const toggleSound = () => { setSoundEnabled(!sound); if (!sound) unlockSound(); };
+
+  const pick = (m: 'IN' | 'OUT') => { modeRef.current = m; setMode(m); unlockSound(); };
 
   useEffect(() => {
     if (!enabled || !requireLocation || !('geolocation' in navigator)) return;
@@ -96,11 +100,13 @@ export function Kiosk({ org, logo, enabled, requireLiveness, enrolled, endpoint 
                     });
                     setResult({ ...r, at: Date.now() });
                     const ok = r.outcome === 'SUCCESS';
+                    announceResult({ ok, name: r.employee?.name, direction: modeRef.current, late: r.status === 'TERLAMBAT', message: r.message });
                     setLog((l) => [{ t: fmtClock(c.now(), c.tz).slice(0, 5), text: ok ? `${r.employee?.name}, ${modeRef.current === 'IN' ? 'masuk' : 'pulang'} ${r.time}` : r.message.split('.')[0], ok }, ...l].slice(0, 30));
                     setStatus(ok ? `Terima kasih, ${r.employee?.name}.` : r.message);
                     pauseUntil = Date.now() + (ok ? 4000 : 3500);
                   }
                 } catch (e) {
+                  announceResult({ ok: false, direction: modeRef.current, message: (e as Error).message });
                   setResult({ at: Date.now(), outcome: 'ERROR', message: (e as Error).message });
                   pauseUntil = Date.now() + 3500;
                 }
@@ -163,6 +169,7 @@ export function Kiosk({ org, logo, enabled, requireLiveness, enrolled, endpoint 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
               <span>{requireLiveness ? 'Hadapkan wajah, lalu kedipkan mata.' : 'Hadapkan wajah ke kamera, satu orang setiap kali.'}</span>
               <span className="flex gap-2">
+                <Button size="sm" variant="outline" aria-pressed={sound} onClick={toggleSound}>{sound ? <Volume2 /> : <VolumeOff />}Suara {sound ? 'aktif' : 'mati'}</Button>
                 <Button size="sm" variant="outline" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen())}><Maximize />Layar penuh</Button>
                 {fieldDutyHref && <Button asChild size="sm" variant="outline"><Link href={fieldDutyHref}><Briefcase />Dinas luar</Link></Button>}
                 {exitHref && <Button asChild size="sm" variant="outline"><Link href={exitHref}>Keluar kiosk</Link></Button>}
