@@ -6,7 +6,9 @@ import { assertCan, can, employeeScopeWhere, unitInScope, type Actor } from '../
 import { conflict, forbidden, notFound, unprocessable } from '../errors';
 import { getSetting } from '../settings';
 import { todayIn, zonedParts } from '../time';
-import { averageOf, COMPETENCE, FOLLOW_UP, INDICATOR_KEYS, predicateOf, round2 } from '../assessment/indicators';
+import { averageOf, COMPETENCE, FOLLOW_UP, predicateOf, round2 } from '../assessment/indicators';
+import { DEFAULT_FORM, formKeys, readForm, type FormDef } from '../assessment/forms';
+import { formForUnit, resolveForms } from './assessment-forms';
 import { pickPeers, type Candidate } from '../assessment/pick';
 import { notifyUsers } from './notifications';
 import { monthText } from './performance';
@@ -131,7 +133,8 @@ const asScores = (j: unknown): Record<string, number> => (j && typeof j === 'obj
  * Gabungkan penilaian satu pegawai: nilai atasan dan rata-rata rekan dihitung terpisah, nilai akhir per indikator
  * adalah rata-rata keduanya bila keduanya ada, atau yang tersedia saja. Kesimpulan diambil dari atasan.
  */
-export function combine(subs: Sub[]) {
+export function combine(subs: Sub[], form: FormDef = DEFAULT_FORM) {
+  const keys = formKeys(form);
   const boss = subs.find((s) => s.role === 'ATASAN' && s.average != null);
   const peers = subs.filter((s) => s.role === 'REKAN' && s.average != null);
   const peerScores = (k: string) => {
@@ -139,18 +142,18 @@ export function combine(subs: Sub[]) {
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
   };
   const final: Record<string, number> = {};
-  for (const k of INDICATOR_KEYS) {
+  for (const k of keys) {
     const b = boss ? asScores(boss.scores)[k] : null;
     const p = peerScores(k);
     const parts = [b, p].filter((x): x is number => typeof x === 'number');
     if (parts.length) final[k] = round2(parts.reduce((a, c) => a + c, 0) / parts.length);
   }
-  const average = Object.keys(final).length ? averageOf(final) : null;
+  const average = Object.keys(final).length ? averageOf(final, keys) : null;
   return {
     bossAverage: boss?.average ?? null,
     peerAverage: peers.length ? round2(peers.reduce((a, p) => a + (p.average ?? 0), 0) / peers.length) : null,
     peerCount: peers.length,
-    final, average, predicate: average == null ? null : predicateOf(average),
+    final, average, predicate: average == null ? null : predicateOf(average, form.passScore), form,
     competence: boss?.competence ?? null, followUp: boss?.followUp ?? null, notes: boss?.note ? [boss.note] : [],
   };
 }
@@ -161,16 +164,18 @@ export async function periodResults(actor: Actor, periodId: string) {
   if (!period) throw notFound('Periode tidak ditemukan.');
   const rows = await prisma.assessmentAssignment.findMany({
     where: { periodId, target: employeeScopeWhere(actor, 'assess.manage') },
-    include: { target: { select: { id: true, fullName: true, employeeNumber: true, position: true, unit: { select: { name: true } } } } },
+    include: { target: { select: { id: true, fullName: true, employeeNumber: true, position: true, unitId: true, unit: { select: { name: true } } } } },
   });
+  const forms = await resolveForms(rows.map((r) => r.target.unitId));
   const byTarget = new Map<string, typeof rows>();
   for (const r of rows) byTarget.set(r.targetEmployeeId, [...(byTarget.get(r.targetEmployeeId) ?? []), r]);
   const results = [...byTarget.values()].map((list) => {
     const submitted = list.filter((a) => a.status === 'SUBMITTED');
+    const form = readForm(submitted.find((a) => a.formSnapshot)?.formSnapshot, forms.get(list[0].target.unitId) ?? DEFAULT_FORM);
     return {
       employee: list[0].target, assigned: list.length, submitted: submitted.length,
       hasBoss: list.some((a) => a.role === 'ATASAN'),
-      ...combine(submitted),
+      ...combine(submitted, form),
     };
   }).sort((a, b) => a.employee.fullName.localeCompare(b.employee.fullName, 'id'));
   return { period, results };
@@ -192,10 +197,11 @@ export async function resultSheet(actor: Actor, periodId: string, employeeId: st
   const isBoss = !!actor.employeeId && emp.supervisorId === actor.employeeId;
   const own = emp.id === actor.employeeId && period.isClosed;
   if (!manage && !isBoss && !own) throw notFound('Hasil penilaian tidak ditemukan.');
-  const subs = await prisma.assessmentAssignment.findMany({ where: { periodId, targetEmployeeId: employeeId, status: 'SUBMITTED' }, select: { role: true, scores: true, average: true, competence: true, followUp: true, note: true } });
+  const subs = await prisma.assessmentAssignment.findMany({ where: { periodId, targetEmployeeId: employeeId, status: 'SUBMITTED' }, select: { role: true, scores: true, average: true, competence: true, followUp: true, note: true, formSnapshot: true } });
+  const form = readForm(subs.find((a) => a.formSnapshot)?.formSnapshot, await formForUnit(emp.unitId));
   const { nikEnc, ...person } = emp;
   void nikEnc;
-  return { period, employee: person, ...combine(subs) };
+  return { period, employee: person, ...combine(subs, form) };
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +237,12 @@ export async function getAssignment(actor: Actor, id: string) {
   const me = await ownId(actor);
   const a = await prisma.assessmentAssignment.findFirst({
     where: { id, assessorEmployeeId: me },
-    include: { period: true, target: { select: { id: true, fullName: true, employeeNumber: true, position: true, unit: { select: { name: true } } } } },
+    include: { period: true, target: { select: { id: true, fullName: true, employeeNumber: true, position: true, unitId: true, unit: { select: { name: true } } } } },
   });
   if (!a) throw notFound('Penugasan penilaian tidak ditemukan.');
-  return a;
+  // Yang sudah dikirim memakai formulir saat dikirim; yang belum memakai formulir unit pegawai sekarang.
+  const form = a.status === 'SUBMITTED' ? readForm(a.formSnapshot, DEFAULT_FORM) : await formForUnit(a.target.unitId);
+  return { ...a, form };
 }
 
 export const submitInput = z.object({
@@ -248,22 +256,24 @@ export async function submitAssessment(actor: Actor, id: string, raw: unknown) {
   const a = await getAssignment(actor, id);
   if (a.period.isClosed) throw conflict('Periode penilaian sudah ditutup.');
   const v = submitInput.parse(raw);
-  const missing = INDICATOR_KEYS.filter((k) => v.scores[k] == null);
+  const form = a.form;
+  const keys = formKeys(form);
+  const missing = keys.filter((k) => v.scores[k] == null);
   if (missing.length) throw unprocessable(`Masih ada ${missing.length} indikator yang belum dinilai.`, Object.fromEntries(missing.map((k) => [k, 'Wajib diisi'])));
   const boss = a.role === 'ATASAN';
   if (boss && (!v.competence || !v.followUp)) throw unprocessable('Isi kesimpulan kompetensi dan tindak lanjut.', { competence: v.competence ? '' : 'Wajib diisi', followUp: v.followUp ? '' : 'Wajib diisi' });
-  const scores = Object.fromEntries(INDICATOR_KEYS.map((k) => [k, v.scores[k]]));
-  const average = averageOf(scores);
+  const scores = Object.fromEntries(keys.map((k) => [k, v.scores[k]]));
+  const average = averageOf(scores, keys);
   await prisma.assessmentAssignment.update({
     where: { id },
     data: {
-      status: 'SUBMITTED', scores: scores as Prisma.InputJsonValue, average, predicate: predicateOf(average),
+      status: 'SUBMITTED', scores: scores as Prisma.InputJsonValue, average, predicate: predicateOf(average, form.passScore), formSnapshot: form as unknown as Prisma.InputJsonValue,
       competence: boss ? v.competence : null, followUp: boss ? v.followUp : null, note: v.note || null, submittedAt: new Date(),
     },
   });
   // Skor tidak dicatat di audit agar rekan tidak bisa dilacak lewat nilai; cukup bahwa penilaian dikirim.
   await audit(actor, { action: 'assessment.submit', entityType: 'AssessmentAssignment', entityId: id, meta: { month: a.period.month, role: a.role } });
-  return { average, predicate: predicateOf(average) };
+  return { average, predicate: predicateOf(average, form.passScore) };
 }
 
 /** Jumlah penilaian yang masih harus dikerjakan (lencana). */

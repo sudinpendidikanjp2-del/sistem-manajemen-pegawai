@@ -4,7 +4,7 @@ import { requirePage } from '@/lib/guard';
 import { getSettings } from '@/lib/settings';
 import { resultSheet } from '@/lib/services/assessment';
 import { monthText } from '@/lib/services/performance';
-import { COMPETENCE, FOLLOW_UP, INDICATOR_GROUPS, PASS_SCORE } from '@/lib/assessment/indicators';
+import { COMPETENCE, FOLLOW_UP } from '@/lib/assessment/indicators';
 import { fmtTanggal, todayIn } from '@/lib/time';
 import { PrintButton } from './print-button';
 
@@ -26,7 +26,9 @@ export default async function SheetPage({ params }: { params: Promise<{ periodId
   const sup = e.supervisor;
   const printed = fmtTanggal(todayIn(s['org.timezone']));
   // Nomor urut indikator berlanjut antar kelompok.
-  const offsets = INDICATOR_GROUPS.map((_, i) => INDICATOR_GROUPS.slice(0, i).reduce((n, g) => n + g.items.length, 0));
+  const groups = r.form.groups;
+  const PASS_SCORE = r.form.passScore;
+  const offsets = groups.map((_, i) => groups.slice(0, i).reduce((n, g) => n + g.items.length, 0));
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-6 print:max-w-none print:p-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -61,7 +63,7 @@ export default async function SheetPage({ params }: { params: Promise<{ periodId
         <table className="mb-3 w-full border-collapse border border-black">
           <thead><tr><th className="w-10 border border-black bg-neutral-100 p-1.5">No</th><th className="border border-black bg-neutral-100 p-1.5 text-left">Indikator penilaian pegawai</th><th className="w-20 border border-black bg-neutral-100 p-1.5">Nilai</th></tr></thead>
           <tbody>
-            {INDICATOR_GROUPS.map((g, gi) => (
+            {groups.map((g, gi) => (
               <FragmentRows key={g.key} title={g.title}>
                 {g.items.map((it, ii) => (
                   <tr key={it.key}><td className="border border-black p-1.5 text-center">{offsets[gi] + ii + 1}</td><td className="border border-black p-1.5">{it.text}</td><td className="border border-black p-1.5 text-center font-semibold tabular-nums">{r.final[it.key] ?? ''}</td></tr>

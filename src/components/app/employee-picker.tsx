@@ -7,11 +7,11 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { api } from './api-client';
 
 export type EmployeeOption = { id: string; name: string; nip: string | null; unitId: string | null; unit: string | null };
-export type OptionsFor = 'jadwal' | 'manual' | 'akun' | 'pin' | 'nilai';
+export type OptionsFor = 'jadwal' | 'manual' | 'akun' | 'pin' | 'nilai' | 'dinilai';
 
 /** Ambil pilihan pegawai dari server. Dipanggil dari event handler atau saat komponen pertama tampil. */
-export async function fetchEmployeeOptions(purpose: OptionsFor, opts: { q?: string; limit?: number } = {}) {
-  const p = new URLSearchParams({ for: purpose, limit: String(opts.limit ?? 50), ...(opts.q ? { q: opts.q } : {}) });
+export async function fetchEmployeeOptions(purpose: OptionsFor, opts: { q?: string; limit?: number; unitId?: string } = {}) {
+  const p = new URLSearchParams({ for: purpose, limit: String(opts.limit ?? 50), ...(opts.q ? { q: opts.q } : {}), ...(opts.unitId ? { unitId: opts.unitId } : {}) });
   return api<{ total: number; rows: EmployeeOption[] }>('GET', `/api/v1/employees/options?${p}`);
 }
 

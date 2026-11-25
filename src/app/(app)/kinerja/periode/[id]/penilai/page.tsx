@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,11 +41,11 @@ export default async function AssessorsPage({ params, searchParams }: { params: 
         title={`Penilai ${monthText(period.month)}`}
         description={`${doneTotal} dari ${doneTotal + pendingTotal} penilaian selesai. Atur siapa menilai siapa, acak, atau petakan per unit; periksa juga siapa yang belum menilai.`}
         crumbs={[{ href: '/kinerja/periode', label: 'Kelola Penilaian' }, { href: `/kinerja/periode/${id}`, label: monthText(period.month) }, { label: 'Penilai' }]}
-        actions={!period.isClosed ? <div className="flex flex-wrap gap-2"><RemindButton periodId={id} pendingCount={pendingTotal} /><ClearAllButton periodId={id} pendingCount={pendingTotal} /></div> : undefined}
+        actions={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href={`/kinerja/periode/${id}/penilai/orang`}><UserCog />Atur per orang</Link></Button>{!period.isClosed && <><RemindButton periodId={id} pendingCount={pendingTotal} /><ClearAllButton periodId={id} pendingCount={pendingTotal} /></>}</div>}
       />
       <PageBody className="grid gap-6">
         {period.isClosed && <p className="rounded-lg border bg-muted px-4 py-3 text-sm">Periode ini sudah ditutup. Buka kembali dari halaman hasil untuk mengubah penilai.</p>}
-        {!period.isClosed && <p className="text-sm text-muted-foreground">Pilih salah satu cara untuk membagi penilai, atau pakai keduanya berurutan. Semua hasil muncul di daftar bawah dan bisa diubah per pegawai.</p>}
+        {!period.isClosed && <p className="text-sm text-muted-foreground">Pilih salah satu cara untuk membagi penilai, atau pakai keduanya berurutan. Untuk mengatur satu orang (siapa yang menilainya dan siapa yang ia nilai), klik namanya di daftar atau tombol Atur per orang. Semua hasil muncul di daftar bawah dan bisa diubah per pegawai.</p>}
         {!period.isClosed && (
           <div className="grid items-start gap-6 lg:grid-cols-2">
             <AutoAssignCard periodId={id} units={units} peerCount={period.peerCount} />
@@ -100,7 +100,7 @@ export default async function AssessorsPage({ params, searchParams }: { params: 
                     const done = r.assessors.filter((a) => a.status === 'SUBMITTED').length;
                     return (
                       <TableRow key={r.id}>
-                        <TableCell className="stack-head pl-4 align-top lg:pl-6"><span className="font-medium">{r.fullName}</span><span className="block text-xs text-muted-foreground">{[r.unit?.name, r.position].filter(Boolean).join(', ') || '-'}{!r.hasAccount && ', belum punya akun (tidak bisa menilai)'}</span><span className="mt-1 block text-xs tabular-nums text-muted-foreground">{r.assessors.length ? `${done} dari ${r.assessors.length} sudah menilai` : 'Belum ada penilai'}</span></TableCell>
+                        <TableCell className="stack-head pl-4 align-top lg:pl-6"><Link href={`/kinerja/periode/${id}/penilai/orang?e=${r.id}`} className="font-medium text-primary hover:underline">{r.fullName}</Link><span className="block text-xs text-muted-foreground">{[r.unit?.name, r.position].filter(Boolean).join(', ') || '-'}{!r.hasAccount && ', belum punya akun (tidak bisa menilai)'}</span><span className="mt-1 block text-xs tabular-nums text-muted-foreground">{r.assessors.length ? `${done} dari ${r.assessors.length} sudah menilai` : 'Belum ada penilai'}</span></TableCell>
                         <TableCell data-label="Penilai" className="whitespace-normal">
                           {r.assessors.length === 0 ? <span className="text-sm text-muted-foreground">Belum ada penilai.</span> : (
                             <ul className="flex flex-wrap gap-1.5">

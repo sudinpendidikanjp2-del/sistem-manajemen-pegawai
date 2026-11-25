@@ -22,8 +22,8 @@ export default async function AssessPage({ params }: { params: Promise<{ id: str
       <PageBody className="grid max-w-4xl gap-4">
         {a.period.isClosed
           ? <Alert variant="warning"><AlertTitle>Periode sudah ditutup</AlertTitle><AlertDescription>Penilaian tidak bisa diubah lagi.</AlertDescription></Alert>
-          : <Alert><AlertTitle>{boss ? 'Anda menilai sebagai atasan langsung' : 'Anda menilai sebagai rekan'}</AlertTitle><AlertDescription>Isi nilai 1 sampai 100 pada setiap indikator. Nilai 75 ke atas Baik, di bawah 75 Buruk. {boss ? '' : 'Identitas Anda tidak ditampilkan kepada pegawai yang dinilai.'}</AlertDescription></Alert>}
-        <AssessForm id={a.id} boss={boss} closed={a.period.isClosed} initial={a.status === 'SUBMITTED' ? { scores: (a.scores ?? {}) as Record<string, number>, competence: a.competence, followUp: a.followUp, note: a.note } : null} />
+          : <Alert><AlertTitle>{boss ? 'Anda menilai sebagai atasan langsung' : 'Anda menilai sebagai rekan'}</AlertTitle><AlertDescription>Isi nilai 1 sampai 100 pada setiap indikator. Nilai {a.form.passScore} ke atas Baik, di bawah {a.form.passScore} Buruk. {boss ? '' : 'Identitas Anda tidak ditampilkan kepada pegawai yang dinilai.'}</AlertDescription></Alert>}
+        <AssessForm id={a.id} boss={boss} form={a.form} closed={a.period.isClosed} initial={a.status === 'SUBMITTED' ? { scores: (a.scores ?? {}) as Record<string, number>, competence: a.competence, followUp: a.followUp, note: a.note } : null} />
       </PageBody>
     </>
   );

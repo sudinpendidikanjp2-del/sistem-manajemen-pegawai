@@ -11,11 +11,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Field, fieldProps } from '@/components/app/field';
 import { api, useAction } from '@/components/app/api-client';
-import { averageOf, COMPETENCE, FOLLOW_UP, INDICATOR_GROUPS, INDICATOR_KEYS, predicateOf } from '@/lib/assessment/indicators';
+import { averageOf, COMPETENCE, FOLLOW_UP, predicateOf } from '@/lib/assessment/indicators';
+import { formKeys, type FormDef } from '@/lib/assessment/forms';
 
 interface Initial { scores: Record<string, number>; competence: string | null; followUp: string | null; note: string | null }
 
-export function AssessForm({ id, boss, closed, initial }: { id: string; boss: boolean; closed: boolean; initial: Initial | null }) {
+export function AssessForm({ id, boss, form, closed, initial }: { id: string; boss: boolean; form: FormDef; closed: boolean; initial: Initial | null }) {
+  const INDICATOR_KEYS = useMemo(() => formKeys(form), [form]);
   const router = useRouter();
   const { pending, fields, error, run } = useAction();
   const [scores, setScores] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(initial?.scores ?? {}).map(([k, v]) => [k, String(v)])));
@@ -27,7 +29,7 @@ export function AssessForm({ id, boss, closed, initial }: { id: string; boss: bo
   const numeric = useMemo(() => Object.fromEntries(Object.entries(scores).filter(([, v]) => v !== '').map(([k, v]) => [k, Number(v)])), [scores]);
   const filled = INDICATOR_KEYS.filter((k) => Number.isInteger(numeric[k]) && numeric[k] >= 1 && numeric[k] <= 100).length;
   const complete = filled === INDICATOR_KEYS.length;
-  const average = filled ? averageOf(numeric) : null;
+  const average = filled ? averageOf(numeric, INDICATOR_KEYS) : null;
   const set = (k: string, v: string) => setScores((s) => ({ ...s, [k]: v.replace(/\D/g, '').slice(0, 3) }));
 
   return (
@@ -44,7 +46,7 @@ export function AssessForm({ id, boss, closed, initial }: { id: string; boss: bo
         <p className="ml-auto text-sm text-muted-foreground tabular-nums">{filled} dari {INDICATOR_KEYS.length} terisi</p>
       </Card>
 
-      {INDICATOR_GROUPS.map((g) => (
+      {form.groups.map((g) => (
         <Card key={g.key} className="gap-0 overflow-hidden py-0">
           <div className="border-b bg-muted px-4 py-2.5 text-sm font-semibold sm:px-6">{g.title}</div>
           <ul className="divide-y">
@@ -67,7 +69,7 @@ export function AssessForm({ id, boss, closed, initial }: { id: string; boss: bo
       <Card className="gap-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><p className="text-sm text-muted-foreground">Nilai rata-rata indikator</p><p className="text-3xl font-semibold tabular-nums">{average ?? '-'}</p></div>
-          {average != null && <Badge variant={predicateOf(average) === 'Baik' ? 'hadir' : 'alpa'} className="text-sm">{predicateOf(average)}</Badge>}
+          {average != null && <Badge variant={predicateOf(average, form.passScore) === 'Baik' ? 'hadir' : 'alpa'} className="text-sm">{predicateOf(average, form.passScore)}</Badge>}
         </div>
         {boss && (
           <div className="grid gap-3 sm:grid-cols-2">

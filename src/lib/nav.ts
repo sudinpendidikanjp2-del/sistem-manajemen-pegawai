@@ -40,6 +40,7 @@ export const NAV: NavItem[] = [
       { href: '/kinerja/tinjau', label: 'Penilaian Laporan', icon: 'shield-check', perms: ['report.review', 'report.manage'] },
       { href: '/kinerja/penilaian', label: 'Penilaian Kinerja', icon: 'clipboard-list', perms: ['assess.self'], hideForAdmin: true },
       { href: '/kinerja/periode', label: 'Kelola Penilaian', icon: 'sliders-horizontal', perms: ['assess.manage'] },
+      { href: '/kinerja/formulir', label: 'Formulir Penilaian', icon: 'file-pen', perms: ['assess.manage'] },
     ],
   },
   { href: '/cuti', label: 'Cuti & Izin', icon: 'plane', perms: ['leave.request', 'leave.approve', 'leave.manage'] },

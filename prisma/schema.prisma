@@ -135,6 +135,8 @@ model OrganizationUnit {
   holidays    Holiday[]
   stations    AttendanceStation[]
 
+  assessmentForm AssessmentFormUnit?
+
   @@map("organization_units")
 }
 
@@ -873,6 +875,7 @@ model AssessmentAssignment {
   source             String           @default("AUTO") // AUTO (diacak sistem) | MANUAL (diatur admin) | UNIT (dari pemetaan unit)
   status             AssessmentStatus @default(PENDING)
   scores             Json? // { kode_indikator: nilai 1-100 }
+  formSnapshot       Json?            @map("form_snapshot") // formulir yang dipakai saat dikirim; kosong = formulir bawaan
   average            Float?
   predicate          String? // Baik | Buruk
   competence         String? // SESUAI | TIDAK_SESUAI (hanya atasan)
@@ -889,6 +892,36 @@ model AssessmentAssignment {
   @@index([assessorEmployeeId, status])
   @@index([periodId, targetEmployeeId])
   @@map("assessment_assignments")
+}
+
+// Formulir penilaian buatan admin. groups: [{ key, title, items: [{ key, text }] }]. Tiap unit kerja paling banyak
+// memakai satu formulir (AssessmentFormUnit); unit tanpa formulir memakai formulir bawaan di kode.
+model AssessmentForm {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  passScore   Int      @default(75) @map("pass_score")
+  groups      Json
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  units AssessmentFormUnit[]
+
+  @@map("assessment_forms")
+}
+
+model AssessmentFormUnit {
+  id              String  @id @default(uuid()) @db.Uuid
+  formId          String  @map("form_id") @db.Uuid
+  unitId          String  @unique @map("unit_id") @db.Uuid
+  includeSubunits Boolean @default(true) @map("include_subunits")
+
+  form AssessmentForm   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  unit OrganizationUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@map("assessment_form_units")
 }
 
 // Catatan pemetaan unit: pegawai di unit penilai menilai pegawai di unit yang dinilai. Hasilnya diurai

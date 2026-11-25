@@ -47,13 +47,13 @@ export const INDICATORS = INDICATOR_GROUPS.flatMap((g) => g.items);
 export const INDICATOR_KEYS = INDICATORS.map((i) => i.key);
 
 export const PASS_SCORE = 75;
-export const predicateOf = (average: number) => (average >= PASS_SCORE ? 'Baik' : 'Buruk');
+export const predicateOf = (average: number, pass = PASS_SCORE) => (average >= pass ? 'Baik' : 'Buruk');
 
 export const COMPETENCE = { SESUAI: 'Sesuai', TIDAK_SESUAI: 'Tidak sesuai' } as const;
 export const FOLLOW_UP = { DIREKOMENDASIKAN: 'Direkomendasikan', PEMBIMBINGAN: 'Pembimbingan', MUTASI: 'Mutasi', DIBERHENTIKAN: 'Diberhentikan' } as const;
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
-export const averageOf = (scores: Record<string, number>) => {
-  const v = INDICATOR_KEYS.map((k) => scores[k]).filter((x) => typeof x === 'number');
+export const averageOf = (scores: Record<string, number>, keys: string[] = INDICATOR_KEYS) => {
+  const v = keys.map((k) => scores[k]).filter((x) => typeof x === 'number');
   return v.length ? round2(v.reduce((a, b) => a + b, 0) / v.length) : 0;
 };
