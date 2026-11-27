@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   'employee.import': ['Pegawai', 'Impor data pegawai'],
   'employee.export': ['Pegawai', 'Ekspor data pegawai'],
   'report.self': ['Kinerja', 'Isi laporan kinerja harian dan kirim laporan bulanan'],
+  'attendance.team': ['Absensi', 'Melihat persentase kehadiran bawahan langsung dan bawahan tidak langsung'],
   'report.review': ['Kinerja', 'Menilai laporan kinerja bawahan langsung'],
   'report.manage': ['Kinerja', 'Melihat dan menilai laporan kinerja semua pegawai dalam cakupan'],
   'assess.self': ['Kinerja', 'Menilai pegawai yang ditugaskan dan melihat hasil penilaian diri sendiri'],
@@ -71,7 +72,7 @@ export const ROLES: Record<string, { name: string; description: string; permissi
     name: 'Pimpinan/Approver',
     description: 'Melihat data dalam kewenangannya dan menyetujui pengajuan.',
     permissions: ['dashboard.view', 'unit.read', 'employee.read', 'attendance.monitor', 'attendance.report', 'attendance.export',
-      'correction.review', 'leave.approve', 'schedule.read', 'report.review'],
+      'correction.review', 'leave.approve', 'schedule.read', 'report.review', 'attendance.team'],
   },
   OPERATOR_UNIT: {
     name: 'Operator Unit',

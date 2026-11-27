@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, useState } from 'react';
-import { Camera, CameraOff, Download, KeyRound, ShieldPlus, Trash2, UserCheck, UserX, X } from 'lucide-react';
+import { Camera, CameraOff, Download, KeyRound, ShieldPlus, Trash2, UserCheck, UserRoundCog, UserX, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,6 +13,7 @@ import { TableCell, TableHead } from '@/components/ui/table';
 import { Field, fieldProps } from '@/components/app/field';
 import { api, useAction } from '@/components/app/api-client';
 import { confirmDialog } from '@/components/app/confirm-dialog';
+import { EmployeePicker } from '@/components/app/employee-picker';
 import { cn } from '@/lib/utils';
 
 interface Ctx { selected: Set<string>; pageIds: string[]; toggle: (id: string, on: boolean) => void; toggleAll: (on: boolean) => void; clear: () => void }
@@ -75,13 +76,15 @@ export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelet
   /** Punya izin kelola pengguna: tombol peran, reset password, dan (non)aktifkan akun tampil. */
   canAccounts: boolean;
   canDelete?: boolean;
-  /** Boleh mengubah data pegawai (employee.write): tombol izin absen foto tampil. */
+  /** Boleh mengubah data pegawai (employee.write): tombol izin absen foto dan atur atasan tampil. */
   canEdit?: boolean;
   noun: string;
 }) {
   const { selected, clear } = useBulk();
   const { pending, fields, error, run } = useAction();
-  const [dialog, setDialog] = useState<null | 'role' | 'delete'>(null);
+  const [dialog, setDialog] = useState<null | 'role' | 'delete' | 'supervisor'>(null);
+  const [bossMode, setBossMode] = useState<'set' | 'clear'>('set');
+  const [bossId, setBossId] = useState('');
   const [sub, setSub] = useState(true);
   const [reason, setReason] = useState('');
   const [result, setResult] = useState<{ title: string; outcome: Outcome } | null>(null);
@@ -89,7 +92,7 @@ export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelet
   const ids = [...selected];
   const send = async (body: Record<string, unknown>, title: string) => {
     const r = await run(() => api<Outcome>('POST', url, { ids, ...body }), { refresh: true });
-    if (r) { setResult({ title, outcome: r }); setDialog(null); setReason(''); clear(); }
+    if (r) { setResult({ title, outcome: r }); setDialog(null); setReason(''); setBossId(''); setBossMode('set'); clear(); }
   };
   if (!ids.length && !result) return null;
   const accountNote = mode === 'employee' ? ' Pegawai yang belum punya akun dilewati.' : '';
@@ -118,6 +121,7 @@ export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelet
               <Button size="sm" variant="outline" disabled={pending} onClick={async () => {
                 if (await confirmDialog({ title: `Cabut absen foto untuk ${ids.length} pegawai?`, description: 'Pegawai ini kembali hanya bisa absen dengan wajah, mesin, atau petugas.', confirmLabel: 'Cabut', destructive: true })) await send({ action: 'photo-off' }, 'Cabut absen foto');
               }}><CameraOff />Cabut absen foto</Button>
+              <Button size="sm" variant="outline" disabled={pending} onClick={() => setDialog('supervisor')}><UserRoundCog />Atur atasan</Button>
             </>}
             {mode === 'employee' && canDelete && <Button size="sm" variant="outline-destructive" onClick={() => setDialog('delete')}><Trash2 />Hapus data</Button>}
           </div>
@@ -145,6 +149,27 @@ export function BulkBar({ mode, roles, units, canAllUnits, canAccounts, canDelet
             </Field>
             <div className="flex items-start gap-3"><Checkbox id="bulk-sub" checked={sub} onCheckedChange={(v) => setSub(!!v)} className="mt-0.5" /><Label htmlFor="bulk-sub" className="font-normal">Termasuk sub-unit</Label></div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setDialog(null)}>Batal</Button><Button type="submit" disabled={pending}>{pending ? 'Menyimpan...' : 'Berikan peran'}</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === 'supervisor'} onOpenChange={(o) => setDialog(o ? 'supervisor' : null)}>
+        <DialogContent className="sm:max-w-md">
+          <form className="grid gap-4" onSubmit={async (e) => { e.preventDefault(); await send({ action: 'supervisor', supervisorId: bossMode === 'set' ? bossId : null }, 'Atur atasan'); }}>
+            <DialogHeader><DialogTitle>Atur atasan langsung untuk {ids.length} pegawai</DialogTitle><DialogDescription>Atasan menerima pengajuan cuti/izin tingkat pertama, menilai laporan kinerja, dan bisa melihat kehadiran bawahannya. Pegawai yang atasannya sudah sama, atau yang akan membuat rantai atasan berputar, dilewati.</DialogDescription></DialogHeader>
+            {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">Tindakan</legend>
+              {([['set', 'Tetapkan atasan'], ['clear', 'Kosongkan atasan']] as const).map(([k, l]) => (
+                <label key={k} className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="radio" name="bossMode" checked={bossMode === k} onChange={() => setBossMode(k)} className="size-4 accent-[var(--primary)]" />{l}</label>
+              ))}
+            </fieldset>
+            {bossMode === 'set' && (
+              <Field id="bulk-boss" label="Atasan langsung" error={fields.supervisorId} required>
+                <EmployeePicker id="bulk-boss" name="supervisorId" purpose="atasan" required emptyLabel="Ketik nama atau NIP atasan" onChange={setBossId} />
+              </Field>
+            )}
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setDialog(null)}>Batal</Button><Button type="submit" disabled={pending || (bossMode === 'set' && !bossId)}>{pending ? 'Menyimpan...' : bossMode === 'set' ? 'Tetapkan atasan' : 'Kosongkan atasan'}</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

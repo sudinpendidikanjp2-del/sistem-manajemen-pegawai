@@ -85,10 +85,66 @@ export interface RecapRow {
 export async function recap(actor: Actor, raw: unknown, perm: 'attendance.report' | 'attendance.export' = 'attendance.report') {
   assertCan(actor, perm);
   const f = reportFilter.parse(raw);
+  const rows = await buildRecap(employeeFilter(actor, f, perm), f);
+  const by: Record<string, (r: RecapRow) => number> = {
+    HADIR: (r) => r.present, TERLAMBAT: (r) => r.late, DINAS_LUAR: (r) => r.fieldDuty, IZIN: (r) => r.permit, SAKIT: (r) => r.sick, CUTI: (r) => r.leave,
+    ALFA: (r) => r.alfa, ALFA_AWAL: (r) => r.alfaAwal, ALFA_AKHIR: (r) => r.alfaAkhir,
+  };
+  return { filter: f, rows: f.status && by[f.status] ? rows.filter((r) => by[f.status!](r) > 0) : rows };
+}
+
+/** Semua bawahan seorang atasan: langsung, atau juga bawahan dari bawahannya (tanpa pegawai nonaktif/terhapus). */
+export async function subordinateIds(supervisorId: string, indirect: boolean) {
+  const all = await prisma.employee.findMany({ where: { deletedAt: null, supervisorId: { not: null } }, select: { id: true, supervisorId: true } });
+  const kids = new Map<string, string[]>();
+  for (const e of all) kids.set(e.supervisorId!, [...(kids.get(e.supervisorId!) ?? []), e.id]);
+  const out = new Set<string>();
+  let frontier = kids.get(supervisorId) ?? [];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      if (id === supervisorId || out.has(id)) continue;
+      out.add(id);
+      if (indirect) next.push(...(kids.get(id) ?? []));
+    }
+    frontier = next;
+  }
+  return [...out];
+}
+
+export const teamQuery = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().catch(undefined),
+  indirect: z.boolean().catch(false).default(false),
+});
+
+/** Persentase kehadiran satu bulan untuk bawahan atasan yang login. Bulan berjalan dihitung sampai hari ini. */
+export async function teamRecap(actor: Actor, raw: unknown) {
+  assertCan(actor, 'attendance.team');
+  const q = teamQuery.parse(raw);
+  const tz = (await getSettings())['org.timezone'];
+  const today = todayIn(tz);
+  const month = q.month && q.month <= today.slice(0, 7) ? q.month : today.slice(0, 7);
+  const first = `${month}-01`;
+  const last = addDays(`${nextMonth(month)}-01`, -1);
+  const f = reportFilter.parse({ from: first, to: last });
+  if (!actor.employeeId) return { month, from: f.from, to: f.to, indirect: q.indirect, rows: [] as RecapRow[], summary: { people: 0, average: null as number | null } };
+  const ids = await subordinateIds(actor.employeeId, q.indirect);
+  const rows = ids.length ? await buildRecap({ id: { in: ids }, deletedAt: null }, f) : [];
+  const withPct = rows.filter((r) => r.attendancePct != null);
+  const average = withPct.length ? Math.round((withPct.reduce((n, r) => n + (r.attendancePct ?? 0), 0) / withPct.length) * 10) / 10 : null;
+  return { month, from: f.from, to: f.to, indirect: q.indirect, rows, summary: { people: rows.length, average } };
+}
+
+const nextMonth = (ym: string) => {
+  const d = new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 1));
+  return d.toISOString().slice(0, 7);
+};
+
+async function buildRecap(base: Prisma.EmployeeWhereInput, f: ReportFilter): Promise<RecapRow[]> {
   const tz = (await getSettings())['org.timezone'];
   const today = todayIn(tz);
   const employees = await prisma.employee.findMany({
-    where: { AND: [employeeFilter(actor, f, perm), { OR: [{ isActive: true }, { activeEffectiveDate: { gte: toDbDate(f.from) } }] }] },
+    where: { AND: [base, { OR: [{ isActive: true }, { activeEffectiveDate: { gte: toDbDate(f.from) } }] }] },
     select: { id: true, fullName: true, employeeNumber: true, unit: { select: { name: true } } },
     orderBy: { fullName: 'asc' },
   });
@@ -128,11 +184,7 @@ export async function recap(actor: Actor, raw: unknown, perm: 'attendance.report
       attendancePct: scheduled.length ? Math.round(((present + fieldDuty) / scheduled.length) * 1000) / 10 : null,
     };
   });
-  const by: Record<string, (r: RecapRow) => number> = {
-    HADIR: (r) => r.present, TERLAMBAT: (r) => r.late, DINAS_LUAR: (r) => r.fieldDuty, IZIN: (r) => r.permit, SAKIT: (r) => r.sick, CUTI: (r) => r.leave,
-    ALFA: (r) => r.alfa, ALFA_AWAL: (r) => r.alfaAwal, ALFA_AKHIR: (r) => r.alfaAkhir,
-  };
-  return { filter: f, rows: f.status && by[f.status] ? rows.filter((r) => by[f.status!](r) > 0) : rows };
+  return rows;
 }
 
 /** Detail harian (satu baris per pegawai per tanggal yang punya catatan). */
